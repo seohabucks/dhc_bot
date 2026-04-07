@@ -1,0 +1,19 @@
+{
+    "crawl_tasks": [
+        {
+            "url": "https://www.kwater.or.kr/wis/wq/index.do?w2xPath=/wis/ui/index.xml",
+            "selector": "div.w2group.ty3"
+        }
+    ],
+    "filter_keywords": [
+        "부단수",
+        "특정공법",
+        "라인스토핑",
+        "핫태핑",
+        "열수송관",
+        "열배관"
+    ],
+    "exclude_keywords": [],
+    "cycle_time": 30,
+    "min_chars": 0
+}
