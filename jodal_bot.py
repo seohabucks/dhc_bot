@@ -158,19 +158,36 @@ def handle_commands():
         time.sleep(1)
 
 def exit_gracefully(signum, frame):
+    """Control+C 또는 종료 신호 발생 시 호출되는 함수"""
     global running
-    print("\n🛑 종료 신호를 받았습니다...")
+    print("\n🛑 종료 신호를 받았습니다. 안전하게 종료합니다...")
+    
+    # [추가] 텔레그램 종료 메시지 전송
+    send_telegram_msg("🛑 *나라장터 + 수자원 통합 알리미가 종료되었습니다.*")
+    
     running = False
+    # 쓰레드들이 정리될 시간을 잠시 준 뒤 종료
+    time.sleep(1)
     sys.exit(0)
 
 if __name__ == "__main__":
+    # 종료 신호 감지 설정
     signal.signal(signal.SIGINT, exit_gracefully)
+    signal.signal(signal.SIGTERM, exit_gracefully)
+    
+    # [추가] 텔레그램 시작 메시지 전송
+    send_telegram_msg("✅ *나라장터 + 수자원 통합 알리미가 가동되었습니다.*")
+    
     print("🚀 나라장터 + 수자원 통합 알리미 가동 중... (종료: Ctrl+C)")
     
+    # 자동 체크 쓰레드 시작
     checker_thread = threading.Thread(target=auto_checker, daemon=True)
     checker_thread.start()
     
     try:
         handle_commands()
     except KeyboardInterrupt:
+        exit_gracefully(None, None)
+    except Exception as e:
+        send_telegram_msg(f"⚠️ *알 수 없는 오류로 프로그램이 중단되었습니다: {e}*")
         exit_gracefully(None, None)
