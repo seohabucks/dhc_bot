@@ -1,17 +1,16 @@
 {
     "crawl_tasks": [
         {
+            "url": "https://www.kwater.or.kr/wis/wq/index.do?w2xPath=/wis/ui/index.xml&&ntfDivCd=SPORT&&targetMenuId=WISWS02131100&&tabId=203030",
+            "selector": "div.gridHeaderTableDefault"
+        },
+        {
             "url": "https://www.kwater.or.kr/wis/wq/index.do?w2xPath=/wis/ui/index.xml",
-            "selector": "div.w2group.ty3"
+            "selector": "div.w2span.title"
         }
     ],
     "filter_keywords": [
-        "부단수",
-        "특정공법",
-        "라인스토핑",
-        "핫태핑",
-        "열수송관",
-        "열배관"
+        "부단수"
     ],
     "exclude_keywords": [],
     "cycle_time": 30,
