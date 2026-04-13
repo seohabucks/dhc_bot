@@ -11,7 +11,7 @@ SERVICE_KEY = 'b6f3dcb33a0e5b9651bd8b90d8b7e108bf24d17d587a9d8f2682f3c50fc39fb0'
 TELEGRAM_TOKEN = '8682869478:AAGHyOOpeZtuAlDV9JMmg3eXQTFhswydFaw'
 CHAT_ID = '8456543788'
 
-KEYWORDS = ["부단수", "특정 공법", "라인스토핑", "핫태핑", "열수송관", "열배관", "공법선정", "신기술", "기법"]
+KEYWORDS = ["부단수", "특정 공법", "차단", "라인스토핑", "핫태핑", "열수송관", "열배관", "공법선정", "공법" , "기법"]
 sent_bids = set()
 running = True
 

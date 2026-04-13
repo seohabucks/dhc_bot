@@ -1,139 +1,93 @@
-import requests
-import datetime
 import time
-import threading
-import sys
-import signal
-import xmltodict
+import requests
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-# --- 설정 정보 ---
-# 이미지 6에서 확인된 실제 작동하는 인증키입니다.
-RAW_SERVICE_KEY = 'b6f3dcb33a0e5b9651bd8b90d8b7e108bf24d17d587a9d8f2682f3c50fc39fb0' # 실제 키의 앞부분 (보안상 이미지 참고)
+# --- 설정 구간 ---
 TELEGRAM_TOKEN = '8682869478:AAGHyOOpeZtuAlDV9JMmg3eXQTFhswydFaw'
 CHAT_ID = '8456543788'
+URL = "https://www.kwater.or.kr/wis/wq/index.do?w2xPath=/wis/ui/index.xml&&ntfDivCd=SPORT&&targetMenuId=WISWS02131100&&tabId=203030"
+SENT_POSTS_FILE = "sent_posts.txt" # 이미 알림 보낸 목록 저장
 
-KEYWORDS = ["부단수", "특정 공법", "라인스토핑", "핫태핑", "열수송관", "열배관", "공법선정", "신기술", "기법"]
-sent_bids = set()
-running = True
-
-def send_telegram_msg(msg):
+def send_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {'chat_id': CHAT_ID, 'text': msg, 'parse_mode': 'Markdown'}
-    try: requests.post(url, data=payload, timeout=10)
-    except: pass
+    requests.post(url, json={"chat_id": CHAT_ID, "text": text})
 
-def get_kwater_data(target_month):
-    """
-    이미지 6의 실제 Request URL 구조를 따릅니다.
-    주소 형식: https://apis.data.go.kr/B500001/ebid/tndr3/{상세경로}
-    """
-    results = []
-    # 이미지 2의 상세기능 목록 기준
-    categories = {
-        '공사': 'cntrwkList',
-        '물품': 'gdsList',
-        '용역': 'servcList'
-    }
+def load_sent_posts():
+    try:
+        with open(SENT_POSTS_FILE, "r", encoding="utf-8") as f:
+            return set(f.read().splitlines())
+    except FileNotFoundError:
+        return set()
 
-    for name, path in categories.items():
-        if not running: break
-        
-        # 이미지 6에서 확인된 최신 ebid/tndr3 경로 적용
-        base_url = f"https://apis.data.go.kr/B500001/ebid/tndr3/{path}"
-        # 인증키 인코딩 방지를 위해 URL 직접 조립
-        full_url = f"{base_url}?serviceKey={RAW_SERVICE_KEY}&pageNo=1&numOfRows=100&searchDt={target_month}&_type=xml"
-        
+def save_sent_post(title):
+    with open(SENT_POSTS_FILE, "a", encoding="utf-8") as f:
+        f.write(title + "\n")
+
+def check_kwater():
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d") # 예: 2026-04-13
+    
+    # 오전 9:00 ~ 오후 17:30 사이인지 체크
+    start_time = now.replace(hour=9, minute=0, second=0)
+    end_time = now.replace(hour=17, minute=30, second=0)
+    
+    if not (start_time <= now <= end_time):
+        print(f"[{now.strftime('%H:%M')}] 대기 모드 (운영시간 아님)")
+        return
+
+    print(f"[{now.strftime('%H:%M')}] 오늘 날짜({today_str}) 공고 탐색 중...")
+    
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    driver = webdriver.Chrome(options=options)
+    wait = WebDriverWait(driver, 20)
+    sent_list = load_sent_posts()
+
+    try:
+        driver.get(URL)
         try:
-            response = requests.get(full_url, timeout=15)
-            
-            if response.status_code != 200:
-                print(f"⚠️ {name} API 응답 실패: {response.status_code}")
-                continue
+            wait.until(EC.frame_to_be_available_and_switch_to_it((By.ID, "mf_wframe_content")))
+        except: pass
 
-            content = response.text.strip()
-            # 이미지 3의 JSON 파싱 오류 방지
-            if not content or content.startswith('<html>') or 'OpenAPI_ServiceResponse' in content:
-                continue
-            
-            # XML 파싱 (이미지 1의 요청변수 기준 xml 출력)
-            data_dict = xmltodict.parse(content)
-            
-            # 수자원 API 일반적인 구조: response -> body -> items -> item 리스트
-            items_raw = data_dict.get('response', {}).get('body', {}).get('items', {}).get('item', [])
-            
-            if isinstance(items_raw, dict): items_raw = [items_raw]
-            
-            for i in items_raw:
-                title = i.get('bid_nm')
-                bid_id = i.get('bid_no')
-                if title and bid_id:
-                    results.append({
-                        'source': f'💧 수자원({name})',
-                        'title': title,
-                        'id': bid_id,
-                        'date': i.get('bid_pblanc_dt'),
-                        'url': "https://ebid.kwater.or.kr/"
-                    })
-        except Exception as e:
-            print(f"⚠️ {name} 처리 중 에러: {e}")
-            
-    return results
+        # 표의 모든 행(tr)을 가져옵니다. 
+        # 웹스퀘어 그리드 본체 테이블 ID 패턴 사용
+        rows = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, "table[id*='grdCsntRegistSttusList_body_table'] tr")))
+        
+        found_new = False
+        for i in range(len(rows)):
+            try:
+                # 제목과 날짜 추출 (행 번호 i를 이용하여 각 셀 접근)
+                title_el = driver.find_element(By.CSS_SELECTOR, f"td[id*='cell_{i}_2']")
+                date_el = driver.find_element(By.CSS_SELECTOR, f"td[id*='cell_{i}_5']")
+                
+                title = title_el.text.strip()
+                post_date = date_el.text.strip()
 
-def auto_checker():
-    global running
-    while running:
-        now = datetime.datetime.now()
-        this_month = now.strftime('%Y%m') # 이미지 1, 6의 searchDt 형식
-        today_str = now.strftime('%Y%m%d')
+                # 조건: 공고일이 오늘이고, 아직 알림을 보내지 않은 제목인 경우
+                if post_date == today_str and title not in sent_list:
+                    print(f"✨ 새 공고 발견: {title}")
+                    msg = f"🔔 [K-water 신규 공고]\n날짜: {post_date}\n제목: {title}\n\n링크: {URL}"
+                    send_telegram(msg)
+                    save_sent_post(title)
+                    sent_list.add(title)
+                    found_new = True
+            except:
+                continue # 빈 행이거나 로딩 중이면 패스
         
-        items = get_kwater_data(this_month)
-        
-        for item in items:
-            if not running: break
-            # 날짜 형식 2026-04-07 -> 20260407 변환
-            pub_date = str(item['date']).replace("-", "")[:8]
-            if pub_date == today_str and item['id'] not in sent_bids:
-                if any(k in item['title'] for k in KEYWORDS):
-                    msg = (
-                        f"🎯 *K-water 신규 공고!*\n"
-                        f"━━━━━━━━━━━━━━\n"
-                        f"📂 *분류:* {item['source']}\n"
-                        f"📌 *공고명:* {item['title']}\n"
-                        f"⏰ *게시:* {item['date']}\n"
-                        f"🔗 [수자원공사 전자조달 바로가기]({item['url']})"
-                    )
-                    send_telegram_msg(msg)
-                    sent_bids.add(item['id'])
-        
-        print(f"[{now.strftime('%H:%M')}] 수자원 통합 체크 완료 (조회: {len(items)}건)")
-        for _ in range(240): # 40분 대기 (중간 종료 체크 가능)
-            if not running: return
-            time.sleep(10)
+        if not found_new:
+            print("새로운 오늘자 공고가 없습니다.")
+
+    except Exception as e:
+        print(f"오류 발생: {e}")
+    finally:
+        driver.quit()
 
 if __name__ == "__main__":
-    # Ctrl+C 즉시 종료 설정
-    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
-    print("🚀 수자원공사 ebid/tndr3 통합 알리미 가동 중...")
-    
-    # 자동 체크 시작
-    threading.Thread(target=auto_checker, daemon=True).start()
-    
-    # 명령어 루프 (메인 쓰레드)
-    last_id = 0
-    while running:
-        try:
-            res = requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates?offset={last_id+1}&timeout=5").json()
-            for update in res.get('result', []):
-                last_id = update['update_id']
-                text = update.get('message', {}).get('text', '')
-                if text.startswith('/검색'):
-                    query = text.replace('/검색', '').strip()
-                    this_month = datetime.datetime.now().strftime('%Y%m')
-                    all_items = get_kwater_data(this_month)
-                    results = [i for i in all_items if query in i['title']]
-                    if not results: send_telegram_msg(f"❌ '{query}' 검색 결과 없음.")
-                    else:
-                        for i in results[:5]:
-                            send_telegram_msg(f"📂 *{i['source']}*\n📌 {i['title']}\n⏰ {i['date']}")
-        except: pass
-        time.sleep(1)
+    while True:
+        check_kwater()
+        # 1시간(3600초) 대기
+        time.sleep(3600)
