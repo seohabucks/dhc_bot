@@ -51,7 +51,7 @@ def get_daily_filename():
     os.makedirs(target_dir, exist_ok=True)
     
     # 파일명 생성
-    filename = now.strftime("%y%m%d") + "_나라장터 공고 리스트.json"
+    filename = now.strftime("%y%m%d") + "_나라장터 공고리스트.json"
     return os.path.join(target_dir, filename)
 
 def load_previous_notices():
