@@ -118,7 +118,7 @@ def fetch_g2b_notices():
         
     return notices
 
-def run_monitor():
+def run_monitor(refresh_event=None):
     print(f"[{get_now_str()}] 나라장터 키워드 모니터링을 시작합니다. (키워드: {', '.join(KEYWORDS)})")
     send_telegram_message(f"<b>[나라장터 모니터링 비서]</b>")
     
@@ -165,9 +165,13 @@ def run_monitor():
                 print(f"[{get_now_str()}] 활성 시간(08:00~18:00)이 아닙니다. 대기 중...")
                 
         except Exception as e:
-            print(f"[{get_now_str()}] 나라장터_루프 실행 중 에러: {e}")
+            print(f"[{get_now_str()}] 루프 실행 중 에러: {e}")
             
-        time.sleep(CHECK_INTERVAL_MINUTES * 60)
+        # time.sleep 부분을 아래처럼 알람벨 대기 모드로 변경!
+        if refresh_event:
+            refresh_event.wait(CHECK_INTERVAL_MINUTES * 60)
+        else:
+            time.sleep(CHECK_INTERVAL_MINUTES * 60)
 
 if __name__ == "__main__":
     run_monitor()

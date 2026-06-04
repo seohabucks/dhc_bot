@@ -158,7 +158,7 @@ def scrape_gh():
             
     return notices
 
-def run_monitor():
+def run_monitor(refresh_event=None):
     """모니터링 핵심 루프"""
     print(f"[{get_now_str()}] GH 신기술/신공법 모니터링을 시작합니다. (키워드: {', '.join(KEYWORDS)})")
     send_telegram_message(f"<b>[GH 모니터링 비서]</b>\n지정된 키워드로 시스템 감시를 시작합니다. (주기: {CHECK_INTERVAL_MINUTES}분)")
@@ -205,9 +205,13 @@ def run_monitor():
                 print(f"[{get_now_str()}] 활성 시간(08:00~18:00)이 아닙니다. 대기 중...")
                 
         except Exception as e:
-            print(f"[{get_now_str()}] GH_루프 실행 중 에러: {e}")
+            print(f"[{get_now_str()}] 루프 실행 중 에러: {e}")
             
-        time.sleep(CHECK_INTERVAL_MINUTES * 60)
+        # time.sleep 부분을 아래처럼 알람벨 대기 모드로 변경!
+        if refresh_event:
+            refresh_event.wait(CHECK_INTERVAL_MINUTES * 60)
+        else:
+            time.sleep(CHECK_INTERVAL_MINUTES * 60)
 
 if __name__ == "__main__":
     run_monitor()

@@ -214,7 +214,7 @@ def scrape_kwater():
             
     return notices
 
-def run_monitor():
+def run_monitor(refresh_event=None):
     """모니터링 핵심 루프"""
     print(f"[{get_now_str()}] K-물산업 공고 모니터링을 시작합니다.")
     send_telegram_message(f"<b>[K-물산업 모니터링]</b>")
@@ -259,10 +259,13 @@ def run_monitor():
                 print(f"[{get_now_str()}] 활성 시간(08:00~18:00)이 아닙니다. 대기 중...")
                 
         except Exception as e:
-            print(f"[{get_now_str()}] K-물산업_루프 실행 중 에러: {e}")
+            print(f"[{get_now_str()}] 루프 실행 중 에러: {e}")
             
-        # 설정된 주기만큼 대기 (초 단위 변환)
-        time.sleep(CHECK_INTERVAL_MINUTES * 60)
+        # time.sleep 부분을 아래처럼 알람벨 대기 모드로 변경!
+        if refresh_event:
+            refresh_event.wait(CHECK_INTERVAL_MINUTES * 60)
+        else:
+            time.sleep(CHECK_INTERVAL_MINUTES * 60)
 
 if __name__ == "__main__":
     run_monitor()
